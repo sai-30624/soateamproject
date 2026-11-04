@@ -1,0 +1,89 @@
+### PayVault demo requests - open in IntelliJ / VS Code (REST Client extension) or copy into Postman.
+### Everything goes through the API Gateway on 8080.
+
+@gw = http://localhost:8080
+
+### 1. Register WWW (returns tokens - copy accessToken into @tokenA)
+POST {{gw}}/api/auth/register
+Content-Type: application/json
+
+{ "fullName": "WWW", "email": "www@payvault.dev", "phone": "9000000001", "password": "secret123" }
+
+### 2. Register XYZ
+POST {{gw}}/api/auth/register
+Content-Type: application/json
+
+{ "fullName": "XYZ", "email": "xyz@payvault.dev", "phone": "9000000002", "password": "secret123" }
+
+### 3. Login as WWW
+POST {{gw}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "www@payvault.dev", "password": "secret123" }
+
+@tokenA = paste-www-access-token-here
+
+### 4. Deposit 500 into WWW's wallet
+POST {{gw}}/api/transactions/deposit
+Authorization: Bearer {{tokenA}}
+Idempotency-Key: deposit-demo-1
+Content-Type: application/json
+
+{ "amount": 500.00 }
+
+### 5. Find XYZ by phone
+GET {{gw}}/api/users/lookup?query=9000000002
+Authorization: Bearer {{tokenA}}
+
+### 6. Transfer 150 from WWW to XYZ (use XYZ's id from step 5)
+POST {{gw}}/api/transactions/transfer
+Authorization: Bearer {{tokenA}}
+Idempotency-Key: transfer-demo-1
+Content-Type: application/json
+
+{ "receiverId": 2, "amount": 150.00, "note": "Lunch" }
+
+### 7. Send step 6 AGAIN with the same Idempotency-Key -> same txnRef, money moves only once
+POST {{gw}}/api/transactions/transfer
+Authorization: Bearer {{tokenA}}
+Idempotency-Key: transfer-demo-1
+Content-Type: application/json
+
+{ "receiverId": 2, "amount": 150.00, "note": "Lunch" }
+
+### 8. Balance -> 350.00
+GET {{gw}}/api/wallets/me
+Authorization: Bearer {{tokenA}}
+
+### 9. Ledger: DEBIT 150.00, balanceBefore 500.00, balanceAfter 350.00
+GET {{gw}}/api/wallets/me/ledger
+Authorization: Bearer {{tokenA}}
+
+### 10. Reconciliation: wallet balance == credits - debits
+GET {{gw}}/api/wallets/me/reconcile
+Authorization: Bearer {{tokenA}}
+
+### 11. Transfer more than the balance -> 422 FAILED "Insufficient balance"
+POST {{gw}}/api/transactions/transfer
+Authorization: Bearer {{tokenA}}
+Idempotency-Key: transfer-demo-2
+Content-Type: application/json
+
+{ "receiverId": 2, "amount": 9999.00 }
+
+### 12. History
+GET {{gw}}/api/transactions
+Authorization: Bearer {{tokenA}}
+
+### 13. Circuit breaker state (stop wallet-service, send a few transfers, then call this)
+GET {{gw}}/api/transactions/circuit
+Authorization: Bearer {{tokenA}}
+
+### 14. Internal endpoints are not reachable through the Gateway (no route + filter blocks /internal) -> 404/403
+POST {{gw}}/internal/wallets/1/credit
+Content-Type: application/json
+
+{ "txnRef": "hack", "amount": 1000000 }
+
+### 15. No token -> 401
+GET {{gw}}/api/wallets/me

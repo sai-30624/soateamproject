@@ -1,0 +1,8 @@
+**/target
+payvault-ui
+.git
+.idea
+*.iml
+data
+logs
+scripts
